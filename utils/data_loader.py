@@ -4,6 +4,7 @@ import os
 import io
 import zipfile
 import tempfile
+import streamlit as st
 
 def load_citation_data(file):
     """
@@ -21,7 +22,11 @@ def load_citation_data(file):
     """
     try:
         df = pd.read_csv(file)
-        
+        # ✅ Normalize column names
+        df.columns = [col.strip().title() for col in df.columns]
+        # Optional: Streamlit preview
+        st.write("📄 Raw Citation Data Preview:")
+        st.write(df)
         # Ensure the expected columns are present
         expected_cols = ['Article Id', 'Title', 'Author', 'Cited By']
         year_cols = [str(year) for year in range(1992, 2024)]
@@ -71,22 +76,27 @@ def load_topic_model_data(file):
     """
     try:
         df = pd.read_csv(file)
+        # ✅ Normalize column names
+        df.columns = [col.strip().title() for col in df.columns]
         
+        # Optional: Streamlit preview
+        st.write("📄 Raw Topic Model Data Preview:")
+        st.write(df)
         # Check for expected column
-        if 'ArticleID' not in df.columns:
+        if 'Articleid' not in df.columns:
             raise ValueError("Missing essential column: ArticleID")
         
         # Identify topic model columns
-        topic_model_prefixes = ['LDA', 'HDP', 'CTM', 'DLDA', 'DHDP', 'DCTM']
+        topic_model_prefixes = ['Lda5','Lda10', 'HDP', 'CTM', 'DLDA', 'DHDP', 'DCTM']
         topic_cols = [col for col in df.columns if any(col.startswith(prefix) for prefix in topic_model_prefixes)]
         
         if not topic_cols:
             raise ValueError("No topic model columns found in the data")
             
         # Keep only necessary columns
-        cols_to_keep = ['ArticleID'] + topic_cols
-        if 'CITATIONCOUNT' in df.columns:
-            cols_to_keep.append('CITATIONCOUNT')
+        cols_to_keep = ['Articleid'] + topic_cols
+        if 'Citationcount' in df.columns:
+            cols_to_keep.append('Citationcount')
             
         df = df[cols_to_keep]
         
