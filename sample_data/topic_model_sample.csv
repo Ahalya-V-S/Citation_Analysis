@@ -1,0 +1,11 @@
+ArticleID,Topic1,Topic2,Topic3,Topic4,Topic5,TopicName1,TopicName2,TopicName3,TopicName4,TopicName5
+paper001,0.45,0.25,0.15,0.10,0.05,"Machine Learning","NLP","Statistics","Bibliometrics","Data Mining"
+paper002,0.15,0.55,0.10,0.15,0.05,"Machine Learning","NLP","Statistics","Bibliometrics","Data Mining"
+paper003,0.05,0.10,0.20,0.55,0.10,"Machine Learning","NLP","Statistics","Bibliometrics","Data Mining"
+paper004,0.10,0.15,0.20,0.40,0.15,"Machine Learning","NLP","Statistics","Bibliometrics","Data Mining"
+paper005,0.20,0.15,0.25,0.30,0.10,"Machine Learning","NLP","Statistics","Bibliometrics","Data Mining"
+paper006,0.05,0.40,0.30,0.15,0.10,"Machine Learning","NLP","Statistics","Bibliometrics","Data Mining"
+paper007,0.30,0.25,0.15,0.20,0.10,"Machine Learning","NLP","Statistics","Bibliometrics","Data Mining"
+paper008,0.10,0.05,0.20,0.25,0.40,"Machine Learning","NLP","Statistics","Bibliometrics","Data Mining"
+paper009,0.20,0.10,0.45,0.15,0.10,"Machine Learning","NLP","Statistics","Bibliometrics","Data Mining"
+paper010,0.25,0.25,0.20,0.15,0.15,"Machine Learning","NLP","Statistics","Bibliometrics","Data Mining"
