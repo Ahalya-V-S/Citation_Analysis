@@ -223,30 +223,64 @@ with tab1:
     # Train model button
     if st.button("Train Prediction Model"):
         with st.spinner("Training model..."):
-            # Split data
-            X_train, X_test, y_train, y_test = train_test_split(
-                X, y_target, test_size=0.2, random_state=42
-            )
+            try:
+                # Check for valid data
+                if X.empty or len(y_target) == 0:
+                    st.error("Empty dataset. Cannot train the model.")
+                    st.stop()
+                
+                # Check for NaN values
+                if X.isna().any().any() or np.isnan(y_target).any():
+                    st.warning("Dataset contains NaN values. Filling missing values with zeros.")
+                    X = X.fillna(0)
+                    y_target = np.nan_to_num(y_target, nan=0.0)
+                
+                # Check for constant features
+                constant_features = []
+                for col in X.columns:
+                    if X[col].nunique() <= 1:
+                        constant_features.append(col)
+                
+                if constant_features:
+                    st.warning(f"Removed {len(constant_features)} constant features that would cause errors in model training.")
+                    X = X.drop(columns=constant_features)
+                
+                if X.shape[1] == 0:
+                    st.error("No valid features remain after preprocessing. Cannot train the model.")
+                    st.stop()
+                
+                # Split data
+                X_train, X_test, y_train, y_test = train_test_split(
+                    X, y_target, test_size=0.2, random_state=42
+                )
+                
+                # Fit model
+                pipeline.fit(X_train, y_train)
+                
+                # Make predictions
+                y_pred = pipeline.predict(X_test)
+                
+                # Calculate metrics
+                mse = mean_squared_error(y_test, y_pred)
+                rmse = np.sqrt(mse)
+                mae = mean_absolute_error(y_test, y_pred)
+                r2 = r2_score(y_test, y_pred)
+                
+                # Cross-validation with error handling
+                try:
+                    cv_scores = cross_val_score(pipeline, X, y_target, cv=min(5, len(X)), scoring='r2')
+                except Exception as e:
+                    st.warning(f"Cross-validation failed: {str(e)}")
+                    cv_scores = np.array([r2])  # Use test set R² as fallback
+                
+                # Display metrics
+                st.subheader("Model Performance")
+                
+                col1, col2, col3, col4 = st.columns(4)
             
-            # Fit model
-            pipeline.fit(X_train, y_train)
-            
-            # Make predictions
-            y_pred = pipeline.predict(X_test)
-            
-            # Calculate metrics
-            mse = mean_squared_error(y_test, y_pred)
-            rmse = np.sqrt(mse)
-            mae = mean_absolute_error(y_test, y_pred)
-            r2 = r2_score(y_test, y_pred)
-            
-            # Cross-validation
-            cv_scores = cross_val_score(pipeline, X, y_target, cv=5, scoring='r2')
-            
-            # Display metrics
-            st.subheader("Model Performance")
-            
-            col1, col2, col3, col4 = st.columns(4)
+            except Exception as e:
+                st.error(f"Error training model: {str(e)}")
+                st.stop()
             
             with col1:
                 st.metric("R² Score", f"{r2:.3f}")
