@@ -550,8 +550,17 @@ with tab3:
                     # Skip if not enough data
                     continue
                 
-                # Calculate correlation and p-value
-                corr, p_value = stats.pearsonr(valid_data['feature'], valid_data['citations'])
+                # Check for constant values which would cause pearsonr to fail
+                if valid_data['feature'].nunique() <= 1 or valid_data['citations'].nunique() <= 1:
+                    # Handle constant input cases
+                    corr, p_value = 0.0, 1.0  # No correlation when one variable is constant
+                else:
+                    # Calculate correlation and p-value
+                    try:
+                        corr, p_value = stats.pearsonr(valid_data['feature'], valid_data['citations'])
+                    except Exception as e:
+                        st.warning(f"Error calculating correlation for {feature}: {str(e)}")
+                        corr, p_value = 0.0, 1.0  # Default values in case of error
                 
                 # Determine significance
                 alpha = 0.05
