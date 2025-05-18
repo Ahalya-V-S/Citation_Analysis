@@ -13,95 +13,100 @@ st.set_page_config(
 
 def main():
     st.title("Research Citation Analysis Platform")
-
+    
     st.markdown("""
     ## Analyze citation patterns and identify factors affecting citation rates
-
+    
     This platform helps researchers understand why some papers have low citation rates by analyzing:
     - Citation trends over time
     - Paper content and linguistic features
     - Topic modeling results
     - Correlations between paper attributes and citation counts
     """)
-
-    # File Upload Section in Main Page
-    st.header("📁 Upload Your Data")
     
-    col1, col2 = st.columns(2)
-
-    with col1:
-        citation_file = st.file_uploader(
-            "Upload citation data (CSV with Article ID, Title, Author, yearly citations)", 
-            type=['csv'], key="citation"
-        )
-        topic_model_file = st.file_uploader(
-            "Upload topic model data (CSV with topic distributions)", 
-            type=['csv'], key="topic_model"
-        )
-
-    with col2:
-        paper_text_file = st.file_uploader(
-            "Upload paper texts (ZIP with folders named by Article ID)", 
-            type=['zip'], key="text_zip"
-        )
-
-    # Check if required files are uploaded
+    st.sidebar.title("Data Upload")
+    
+    # Upload citation data
+    citation_file = st.sidebar.file_uploader(
+        "Upload citation data (CSV with Article ID, Title, Author, yearly citations)", 
+        type=['csv']
+    )
+    
+    # Upload topic model data
+    topic_model_file = st.sidebar.file_uploader(
+        "Upload topic model data (CSV with topic distributions)", 
+        type=['csv']
+    )
+    
+    # Upload paper text folder (zip file)
+    paper_text_file = st.sidebar.file_uploader(
+        "Upload paper texts (ZIP with folders named by Article ID)", 
+        type=['zip']
+    )
+    
+    # Check if all necessary files are uploaded
     if citation_file and topic_model_file:
-        # Load datasets
+        # Load the datasets
         citation_df = load_citation_data(citation_file)
         topic_model_df = load_topic_model_data(topic_model_file)
-
-        # Store in session
+        
+        # Store the data in session state for use across pages
         st.session_state['citation_data'] = citation_df
         st.session_state['topic_model_data'] = topic_model_df
-
-        # Display Summary
-        st.header("📊 Data Summary")
-
+        
+        # Display data summary
+        st.header("Data Summary")
+        
         col1, col2 = st.columns(2)
-
+        
         with col1:
             st.subheader("Citation Dataset")
             st.write(f"Number of papers: {len(citation_df)}")
-            st.write("Year range: 1992–2023")
+            st.write(f"Year range: 1992-2023")
             st.write(f"Average citations per paper: {citation_df['Cited By'].mean():.1f}")
-
+            
+            # Calculate some basic metrics
             citation_metrics = calculate_citation_metrics(citation_df)
             st.write(f"Median citations: {citation_metrics['median_citations']}")
             st.write(f"Papers with zero citations: {citation_metrics['zero_citation_count']} ({citation_metrics['zero_citation_percent']:.1f}%)")
-
+            
         with col2:
             st.subheader("Topic Model Dataset")
             st.write(f"Number of papers: {len(topic_model_df)}")
-            st.write("Topic models available: LDA, HDP, CTM")
-            st.write("Models with different topic counts: 5, 10")
-
+            st.write(f"Topic models available: LDA, HDP, CTM")
+            st.write(f"Models with different topic counts: 5, 10")
+            
+        # If paper texts are provided, show info about them
         if paper_text_file:
             st.session_state['paper_text_file'] = paper_text_file
-            st.subheader("📄 Paper Text Files")
+            st.subheader("Paper Text Files")
             st.write("Paper text files uploaded. You can analyze text content in the Text Analysis page.")
-
-        st.subheader("📌 Citation Data Preview")
+            
+        # Display preview of citation data
+        st.subheader("Citation Data Preview")
         st.dataframe(citation_df.head())
-
-        st.subheader("📌 Topic Model Data Preview")
+        
+        # Display preview of topic model data
+        st.subheader("Topic Model Data Preview")
         st.dataframe(topic_model_df.head())
-
-        st.success("✅ Data loaded successfully! Navigate to the specific analysis pages using the sidebar.")
-
-        st.header("🧭 How to Use This Platform")
+        
+        st.success("Data loaded successfully! Navigate to the specific analysis pages using the sidebar.")
+        
+        # Instructions for using the platform
+        st.header("How to Use This Platform")
         st.markdown("""
-        1. **Citation Trends**: Analyze how citations evolve over time  
-        2. **Text Analysis**: Examine linguistic features of papers  
-        3. **Topic Modeling**: Explore topic distributions across papers  
-        4. **Correlation Analysis**: Identify factors correlated with citation counts  
-        5. **Predictive Analysis**: Use machine learning to predict citation potential  
+        1. **Citation Trends**: Analyze how citations evolve over time
+        2. **Text Analysis**: Examine linguistic features of papers 
+        3. **Topic Modeling**: Explore topic distributions across papers
+        4. **Correlation Analysis**: Identify factors correlated with citation counts
+        5. **Predictive Analysis**: Use machine learning to predict citation potential
         """)
     else:
         st.info("Please upload the required datasets to begin analysis.")
-
-        st.header("📄 Expected Data Formats")
-
+        
+        # Example of expected data formats
+        st.header("Expected Data Formats")
+        
         st.subheader("Citation Data Format")
         example_citation = pd.DataFrame({
             'Article Id': ['hep-th/9201002', 'hep-th/9201003'],
@@ -113,7 +118,7 @@ def main():
             '2023': [0, 0]
         })
         st.dataframe(example_citation)
-
+        
         st.subheader("Topic Model Data Format")
         example_topic = pd.DataFrame({
             'ArticleID': ['hep-th/9201002', 'hep-th/9201003'],
@@ -123,9 +128,10 @@ def main():
             'CITATIONCOUNT': [45, 12]
         })
         st.dataframe(example_topic)
-
+        
         st.subheader("Paper Text Format")
-        st.code("""Paper: hep-th/9201002
+        st.code("""
+Paper: hep-th/9201002
 From: TARLINI%FI.INFN.IT@ICINECA.CINECA.IT
 Date: Thu, 2 JAN 92 12:17 N   (6kb)
 
