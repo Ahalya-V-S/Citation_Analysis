@@ -1,21 +1,35 @@
 import streamlit as st
+
+# This MUST be the very first Streamlit command in the script
+st.set_page_config(
+    page_title="Text Analysis",
+    page_icon="📝",
+    layout="wide"
+)
+
+# Now we can import other libraries
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import plotly.express as px
-from utils.text_analysis import preprocess_text, extract_text_features, compare_papers_text_features, extract_keyphrases
-from utils.data_loader import load_paper_text, load_paper_metadata
+import nltk
+from nltk.tokenize import word_tokenize, sent_tokenize
+from nltk.corpus import stopwords
 from collections import Counter
 import plotly.graph_objects as go
 from wordcloud import WordCloud
 import base64
 from io import BytesIO
 
-st.set_page_config(
-    page_title="Text Analysis",
-    page_icon="📝",
-    layout="wide"
+# Now import text analysis utilities after ensuring NLTK resources are available
+from utils.text_analysis import (
+    preprocess_text, 
+    extract_text_features, 
+    compare_papers_text_features, 
+    extract_keyphrases,
+    analyze_common_keywords
 )
+from utils.data_loader import load_paper_text, load_paper_metadata
 
 st.title("Text Analysis of Research Papers")
 
@@ -73,11 +87,22 @@ with tab1:
         # Display paper metadata
         st.subheader("Paper Metadata")
         
+        # Create an expander for viewing the raw text if needed
+        with st.expander("View Raw Paper Content"):
+            st.code(paper_text[:2000] + "..." if len(paper_text) > 2000 else paper_text)
+        
+        # Create columns for better layout
         col1, col2 = st.columns(2)
         
         with col1:
+            if paper_metadata['paper']:
+                st.markdown(f"**Paper ID:** {paper_metadata['paper']}")
+            
             st.markdown(f"**Title:** {paper_metadata['title'] or 'N/A'}")
             st.markdown(f"**Authors:** {paper_metadata['authors'] or 'N/A'}")
+            
+            if paper_metadata['from']:
+                st.markdown(f"**From:** {paper_metadata['from']}")
             
             # Find citation count if available
             citation_count = "N/A"
@@ -87,11 +112,18 @@ with tab1:
         
         with col2:
             st.markdown(f"**Date:** {paper_metadata['date'] or 'N/A'}")
+            
+            if paper_metadata['comments']:
+                st.markdown(f"**Comments:** {paper_metadata['comments']}")
+            
             st.markdown(f"**Journal:** {paper_metadata['journal'] or 'N/A'}")
         
-        # Display abstract
+        # Display abstract with special formatting
         st.subheader("Abstract")
-        st.write(paper_metadata['abstract'] or "Abstract not available")
+        if paper_metadata['abstract']:
+            st.markdown(f"<div style='background-color:#1e1e1e; color:#ffffff; padding:15px; border-radius:5px'>{paper_metadata['abstract']}</div>", unsafe_allow_html=True)
+        else:
+            st.info("Abstract not available for this paper.")
         
         # Extract text features
         with st.spinner("Analyzing text features..."):
@@ -247,61 +279,130 @@ with tab2:
                 st.error(f"Error loading paper texts: {str(e)}")
                 st.stop()
     
-    # Number of papers to compare
-    num_papers = st.slider(
-        "Number of papers to compare",
-        min_value=2,
-        max_value=min(20, len(paper_texts)),
-        value=min(10, len(paper_texts))
-    )
+    # Number of papers to compare (with safety checks)
+    num_papers_available = len(paper_texts) if paper_texts else 0
     
-    # Select papers to compare
-    paper_ids = list(paper_texts.keys())
+    if num_papers_available < 2:
+        st.warning("Insufficient papers available for comparison. At least 2 papers are needed.")
+        st.stop()
     
-    selected_papers = st.multiselect(
-        "Select papers to compare",
-        options=paper_ids,
-        default=paper_ids[:num_papers]
-    )
+    max_papers = min(20, num_papers_available)
+    default_papers = min(10, num_papers_available)
     
-    if selected_papers:
-        # Extract text features for selected papers
-        with st.spinner("Analyzing text features..."):
-            papers_features = {}
-            for paper_id in selected_papers:
-                papers_features[paper_id] = extract_text_features(paper_texts[paper_id])
+    # Create tabs for different comparison views
+    comp_tab1, comp_tab2, comp_tab3 = st.tabs(["Paper Selection", "Feature Comparison", "Keyword Analysis"])
+    
+    with comp_tab1:
+        st.subheader("Select Papers to Compare")
         
-        # Create citation count dictionary if available
-        citation_counts = {}
-        if 'Article Id' in citation_df.columns:
-            for paper_id in selected_papers:
-                if paper_id in citation_df['Article Id'].values:
-                    citation_counts[paper_id] = citation_df[citation_df['Article Id'] == paper_id]['Cited By'].iloc[0]
+        # Add option to select different paper datasets
+        dataset_selection = st.radio(
+            "Selection Method",
+            options=["Use all available papers", "Select by number", "Select specific papers"],
+            index=1
+        )
         
-        # Compare text features
-        comparison_df = compare_papers_text_features(papers_features, citation_counts)
+        # Get paper IDs
+        paper_ids = list(paper_texts.keys())
         
+        if dataset_selection == "Use all available papers":
+            selected_papers = paper_ids[:min(20, len(paper_ids))]
+            st.info(f"Using the first {len(selected_papers)} papers from the dataset")
+        
+        elif dataset_selection == "Select by number":
+            num_papers = st.slider(
+                "Number of papers to compare",
+                min_value=2,
+                max_value=max_papers,
+                value=default_papers
+            )
+            selected_papers = paper_ids[:num_papers]
+            st.info(f"Using the first {len(selected_papers)} papers from the dataset")
+        
+        else:  # Select specific papers
+            # Add a select all button
+            if st.button("Select All Available Papers (max 20)"):
+                selected_papers = paper_ids[:min(20, len(paper_ids))]
+            else:
+                # Add options to filter or search papers
+                filter_option = st.checkbox("Enable search/filter by ID", value=False)
+                
+                if filter_option:
+                    search_term = st.text_input("Filter papers by ID (partial match)").strip().lower()
+                    if search_term:
+                        filtered_ids = [pid for pid in paper_ids if search_term in pid.lower()]
+                        if not filtered_ids:
+                            st.warning(f"No papers match '{search_term}'")
+                            filtered_ids = paper_ids
+                    else:
+                        filtered_ids = paper_ids
+                else:
+                    filtered_ids = paper_ids
+                
+                # Show papers in a multiselect
+                selected_papers = st.multiselect(
+                    "Select specific papers to compare",
+                    options=filtered_ids,
+                    default=filtered_ids[:min(5, len(filtered_ids))]
+                )
+    
+        # Display number of selected papers
+        st.write(f"Selected {len(selected_papers)} papers for comparison")
+        
+        # If no papers selected, show a warning
+        if not selected_papers:
+            st.warning("Please select at least one paper to continue")
+            st.stop()
+    
+    # Since we have papers selected, continue with analysis
+    # Extract text features for selected papers
+    with st.spinner("Analyzing text features..."):
+        papers_features = {}
+        for paper_id in selected_papers:
+            papers_features[paper_id] = extract_text_features(paper_texts[paper_id])
+    
+    # Create citation count dictionary if available
+    citation_counts = {}
+    if 'Article Id' in citation_df.columns:
+        for paper_id in selected_papers:
+            if paper_id in citation_df['Article Id'].values:
+                citation_counts[paper_id] = citation_df[citation_df['Article Id'] == paper_id]['Cited By'].iloc[0]
+    
+    # Compare text features
+    comparison_df = compare_papers_text_features(papers_features, citation_counts)
+    
+    with comp_tab2:
         # Display comparison table
         st.subheader("Text Features Comparison")
-        st.dataframe(comparison_df)
+        st.dataframe(comparison_df, use_container_width=True)
         
         # Create scatter plot matrix
         st.subheader("Feature Relationships")
         
+        # Extended feature options including the new metrics
+        feature_options = [
+            'avg_sentence_length', 
+            'avg_word_length', 
+            'lexical_diversity',
+            'flesch_reading_ease',
+            'flesch_kincaid_grade',
+            'noun_ratio',
+            'verb_ratio',
+            'adj_ratio',
+            'adv_ratio'
+        ]
+        
+        # Add advanced metrics if available
+        if 'technical_complexity' in comparison_df.columns:
+            feature_options.append('technical_complexity')
+        
+        if 'formality_score' in comparison_df.columns:
+            feature_options.append('formality_score')
+        
         # Select features to plot
         plot_features = st.multiselect(
             "Select features to compare",
-            options=[
-                'avg_sentence_length', 
-                'avg_word_length', 
-                'lexical_diversity',
-                'flesch_reading_ease',
-                'flesch_kincaid_grade',
-                'noun_ratio',
-                'verb_ratio',
-                'adj_ratio',
-                'adv_ratio'
-            ],
+            options=feature_options,
             default=[
                 'avg_sentence_length', 
                 'lexical_diversity',
@@ -370,17 +471,120 @@ with tab2:
                 
                 st.plotly_chart(fig, use_container_width=True)
                 
-                # Interpretation
-                st.markdown("""
-                **Interpretation of Correlations:**
-                - Values close to 1 indicate a strong positive relationship (feature increases with citations)
-                - Values close to -1 indicate a strong negative relationship (feature decreases with citations)
-                - Values close to 0 indicate little or no relationship
-                """)
-        else:
-            st.info("Please select at least one feature to plot.")
-    else:
-        st.info("Please select at least one paper to compare.")
+    with comp_tab3:
+        st.subheader("Keyword Analysis Across Papers")
+        
+        # Extract common keywords across papers
+        try:
+            keyword_df, keyword_frequency_df = analyze_common_keywords(papers_features, top_n=15)
+            
+            # Display top keywords
+            st.write("Most Common Keywords Across Selected Papers")
+            
+            # Create bar chart for keyword frequency
+            fig = px.bar(
+                keyword_df,
+                x='Keyword',
+                y='Frequency',
+                title="Most Common Keywords",
+                color='Frequency',
+                color_continuous_scale='viridis'
+            )
+            
+            fig.update_layout(
+                xaxis_title="Keyword",
+                yaxis_title="Frequency",
+                xaxis={'categoryorder':'total descending'}
+            )
+            
+            st.plotly_chart(fig, use_container_width=True)
+            
+            # Display heatmap of keywords by paper
+            st.write("Keyword Presence by Paper")
+            
+            # Prepare data for heatmap
+            heatmap_data = keyword_frequency_df.set_index('paper_id')
+            
+            # Create heatmap
+            fig = px.imshow(
+                heatmap_data,
+                labels=dict(x="Keyword", y="Paper ID", color="Present"),
+                x=heatmap_data.columns,
+                y=heatmap_data.index,
+                color_continuous_scale='viridis'
+            )
+            
+            fig.update_layout(
+                height=max(400, len(selected_papers) * 25),
+                width=900
+            )
+            
+            st.plotly_chart(fig, use_container_width=True)
+            
+            # If citation data is available, analyze keyword-citation relationships
+            if citation_counts and len(citation_counts) > 3:
+                st.subheader("Keywords vs. Citation Counts")
+                
+                # Merge keyword data with citation counts
+                keyword_citation_data = []
+                
+                for paper_id in keyword_frequency_df['paper_id']:
+                    if paper_id in citation_counts:
+                        paper_row = keyword_frequency_df[keyword_frequency_df['paper_id'] == paper_id].iloc[0].to_dict()
+                        paper_row['citation_count'] = citation_counts[paper_id]
+                        keyword_citation_data.append(paper_row)
+                
+                if keyword_citation_data:
+                    keyword_citation_df = pd.DataFrame(keyword_citation_data)
+                    
+                    # Calculate average citation count for papers with/without each keyword
+                    keyword_impact = []
+                    
+                    for keyword in keyword_df['Keyword']:
+                        with_keyword = keyword_citation_df[keyword_citation_df[keyword] == 1]['citation_count']
+                        without_keyword = keyword_citation_df[keyword_citation_df[keyword] == 0]['citation_count']
+                        
+                        if len(with_keyword) > 0 and len(without_keyword) > 0:
+                            avg_with = with_keyword.mean()
+                            avg_without = without_keyword.mean()
+                            difference = avg_with - avg_without
+                            
+                            keyword_impact.append({
+                                'Keyword': keyword,
+                                'Avg Citations With': avg_with,
+                                'Avg Citations Without': avg_without,
+                                'Difference': difference
+                            })
+                    
+                    if keyword_impact:
+                        impact_df = pd.DataFrame(keyword_impact)
+                        impact_df = impact_df.sort_values('Difference', ascending=False)
+                        
+                        # Create bar chart of keyword impact
+                        fig = px.bar(
+                            impact_df,
+                            x='Keyword',
+                            y='Difference',
+                            title="Difference in Average Citations With vs. Without Keyword",
+                            color='Difference',
+                            color_continuous_scale='RdBu_r'
+                        )
+                        
+                        fig.update_layout(
+                            xaxis_title="Keyword",
+                            yaxis_title="Difference in Average Citations",
+                            xaxis={'categoryorder':'total descending'}
+                        )
+                        
+                        st.plotly_chart(fig, use_container_width=True)
+                        
+                        # Display table of keyword impact
+                        st.write("Impact of Keywords on Citation Counts")
+                        st.dataframe(impact_df, use_container_width=True)
+        
+        except Exception as e:
+            st.error(f"Error analyzing keywords: {str(e)}")
+            st.info("This could be due to missing 'keyphrases' in the extracted text features. Try analyzing fewer papers or check the logs for more details.")
 
 with tab3:
     st.header("Keyword Analysis")
