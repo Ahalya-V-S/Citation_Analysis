@@ -20,22 +20,28 @@ def calculate_citation_metrics(citation_df):
     """
     total_papers = len(citation_df)
     
-    # Extract citation counts
-    citation_counts = citation_df['Cited By'].values
+    # Extract citation counts and handle potential NaN values
+    citation_counts = citation_df['Cited By'].fillna(0).values
     
-    # Calculate basic statistics
-    total_citations = citation_counts.sum()
-    mean_citations = citation_counts.mean()
-    median_citations = np.median(citation_counts)
-    max_citations = citation_counts.max()
-    min_citations = citation_counts.min()
+    # Calculate basic statistics with NaN handling
+    total_citations = np.nansum(citation_counts)
+    mean_citations = np.nanmean(citation_counts)
+    median_citations = np.nanmedian(citation_counts)
+    max_citations = np.nanmax(citation_counts)
+    min_citations = np.nanmin(citation_counts)
     
     # Calculate citation percentiles
-    percentiles = np.percentile(citation_counts, [10, 25, 50, 75, 90, 95, 99])
+    # Remove NaN values before percentile calculation
+    valid_citations = citation_counts[~np.isnan(citation_counts)]
+    if len(valid_citations) > 0:
+        percentiles = np.percentile(valid_citations, [10, 25, 50, 75, 90, 95, 99])
+    else:
+        # Default to zeros if no valid citation data
+        percentiles = np.zeros(7)
     
     # Count papers with zero citations
     zero_citation_count = np.sum(citation_counts == 0)
-    zero_citation_percent = (zero_citation_count / total_papers) * 100
+    zero_citation_percent = (zero_citation_count / total_papers) * 100 if total_papers > 0 else 0
     
     # Calculate h-index for the collection
     h_index = calculate_h_index(citation_counts)
@@ -107,15 +113,30 @@ def calculate_gini(citation_counts):
     float
         Gini coefficient (0 = perfect equality, 1 = perfect inequality)
     """
+    # Remove NaN values and handle empty arrays
+    valid_counts = citation_counts[~np.isnan(citation_counts)]
+    
+    if len(valid_counts) == 0 or np.sum(valid_counts) == 0:
+        return 0.0  # Default value when no valid data
+    
     # Sort citation counts
-    sorted_counts = np.sort(citation_counts)
+    sorted_counts = np.sort(valid_counts)
     n = len(sorted_counts)
     
-    # Calculate Gini coefficient
-    index = np.arange(1, n + 1)
-    gini = ((2 * index - n - 1) * sorted_counts).sum() / (n * sorted_counts.sum())
+    # Handle special case of n=1
+    if n <= 1:
+        return 0.0
     
-    return gini
+    # Calculate Gini coefficient with safety checks
+    index = np.arange(1, n + 1)
+    sum_counts = np.sum(sorted_counts)
+    
+    if sum_counts == 0:
+        return 0.0  # Avoid division by zero
+        
+    gini = ((2 * index - n - 1) * sorted_counts).sum() / (n * sum_counts)
+    
+    return float(gini)  # Ensure we return a Python float, not np.float
 
 def analyze_citation_trends(citation_df):
     """
